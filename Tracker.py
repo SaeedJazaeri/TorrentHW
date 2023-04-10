@@ -22,7 +22,7 @@ class TorrentTracker:
             _, filename, peer_address, filesize = message.split()
             if filename not in self.files:
                 self.files[filename] = []
-                self.sizes[filename] = []
+                self.sizes[filename] = filesize
             self.files[filename].append(peer_address)
             self.peers[peer_address] = time.time() # update last seen time
             print(f'File {filename} with size {filesize} registered by Peer at {peer_address}')
