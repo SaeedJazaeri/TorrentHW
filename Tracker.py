@@ -8,6 +8,7 @@ import time
 class TorrentTracker:
     def __init__(self):
         self.files = {}
+        self.sizes = {}
         self.peers = {}
         self.IP, self.port = sys.argv[1].split(":")
 
@@ -16,16 +17,17 @@ class TorrentTracker:
 
     def datagram_received(self, data, addr):
         message = data.decode().strip()
-
         # Check if the message is a file registration or request
         if message.startswith('register'):
-            _, filename, peer_address = message.split()
+            _, filename, peer_address, filesize = message.split()
             if filename not in self.files:
                 self.files[filename] = []
+                self.sizes[filename] = []
             self.files[filename].append(peer_address)
             self.peers[peer_address] = time.time() # update last seen time
-            print(f'File {filename} registered by Peer at {peer_address}')
+            print(f'File {filename} with size {filesize} registered by Peer at {peer_address}')
             self.transport.sendto('ok\n'.encode(), addr)
+
 
         elif message.startswith('request'):
             _, filename = message.split()
@@ -33,6 +35,14 @@ class TorrentTracker:
                 peer_list = ' '.join(self.files[filename])
                 info = 'peers {}\n'.format(peer_list)
                 self.transport.sendto(info.encode(), addr)
+            else:
+                self.transport.sendto('file not found\n'.encode(), addr)
+
+        elif message.startswith('size'):
+            _, filename = message.split()
+            if filename in self.files:
+                size = 'volume {}\n'.format(self.sizes[filename])
+                self.transport.sendto(size.encode(), addr)
             else:
                 self.transport.sendto('file not found\n'.encode(), addr)
 

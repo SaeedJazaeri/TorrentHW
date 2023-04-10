@@ -138,7 +138,7 @@ class TorrentPeer:
         writer.close()
 
         # Save the file data to disk
-        with open(str(pathlib.Path(__file__).parent.resolve()) + "\\" + self.file_name , 'wb') as f:
+        with open(str(pathlib.Path(__file__).parent.resolve()) + "\\" + self.file_name + "2", 'wb') as f:
             f.write(data)
 
         # Print a message to indicate that the file has been downloaded
