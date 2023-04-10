@@ -7,6 +7,7 @@ import asyncudp
 import socket
 import threading
 import pathlib
+import aioconsole
 
 
 
@@ -19,6 +20,9 @@ class TorrentPeer:
         self.own_address = own_address
         self.file_size = None
         self.peers = []
+
+        self.logs = []
+
 
     async def start(self):
         # Register with the tracker if in sharing mode
@@ -33,6 +37,7 @@ class TorrentPeer:
 
 
         asyncio.create_task(self.respond_keepalive())
+        asyncio.create_task(self.logger())
 
         # Start the peer server to accept incoming connections
         server = await asyncio.start_server(self.handle_peer_request, *self.own_address.split(':'))
@@ -50,39 +55,14 @@ class TorrentPeer:
         sock = await asyncudp.create_socket(remote_addr=(ip, int(port)))
         rootpath = pathlib.Path(__file__).parent.resolve()
         self.file_size = os.stat(f"{rootpath}/{self.file_name}").st_size
-        print(self.file_size)
         sock.sendto(f'register {self.file_name} {self.own_address} {self.file_size}'.encode())
         print("send the share message to tracker")
         data, addr = await sock.recvfrom()
         print(f"got {data.decode()} from {addr}")
+        self.logs.append(data.decode())
         await asyncio.sleep(0.5)
         sock.close()
 
-    # async def create_TCP_server(self):
-    #     server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    #     ip, port = self.own_address.split(":")
-    #     server.bind((ip, int(port)))
-    #     server.listen(8)
-    #     server.setblocking(False)
-    #     asyncio.create_task(self.respond_keepalive())
-
-    #     loop = asyncio.get_event_loop()
-    #     print(f"TCP server created of {ip}:{port}")
-    #     while True:
-    #         client, addr = await loop.sock_accept(server)
-    #         print("connected to client :",addr)
-    #         loop.create_task(self.handle_TCP_client(client,addr))
-
-    # async def handle_TCP_client(client,addr):
-    #     loop = asyncio.get_event_loop()
-    #     loop.sock_sendall(client,'connected to server'.encode())
-    #     request = None
-    #     while request != 'quit':
-    #         request = (await loop.sock_recv(client, 255)).decode('utf8')
-    #         print(f'got from {addr} : {request}')
-    #         response = 'got message'
-    #         await loop.sock_sendall(client, response.encode('utf8'))
-    #     client.close()
 
 
         
@@ -90,10 +70,11 @@ class TorrentPeer:
     async def get_file_info(self):
         ip, port = (self.tracker_address).split(":")
         sock = await asyncudp.create_socket(remote_addr=(ip, int(port)))
-        sock.sendto(f'request {self.file_name}'.encode())
+        sock.sendto(f'request {self.file_name} {self.own_address}'.encode())
         print("send the get info message to tracker")
         data, addr = await sock.recvfrom()
         print(f"got {data.decode()} from {addr[0]}:{addr[1]}")
+        self.logs.append(data.decode())
         await asyncio.sleep(0.5)
         message = data.decode().strip()
         _, peer_list = message.split("peers ")
@@ -116,6 +97,7 @@ class TorrentPeer:
         print("send the get filesize message to tracker")
         data, addr = await sock.recvfrom()
         print(f"got {data.decode()} from {addr[0]}:{addr[1]}")
+        self.logs.append(data.decode())
         await asyncio.sleep(0.5)
         message = data.decode().strip()
         _, size = message.split()
@@ -181,6 +163,13 @@ class TorrentPeer:
                 sock.close()
             # Wait for a longer period of time before sending the next keepalive message
             await asyncio.sleep(9)
+
+    async def logger(self):
+        while True:
+            command = await aioconsole.ainput(">")
+            if command == "request_logs":
+                for l in self.logs:
+                    print(l)
 
 
 if __name__ == '__main__':

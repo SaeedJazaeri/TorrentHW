@@ -4,6 +4,7 @@ import socket
 import threading
 from threading import Thread
 import time
+import aioconsole
 
 class TorrentTracker:
     def __init__(self):
@@ -11,6 +12,8 @@ class TorrentTracker:
         self.sizes = {}
         self.peers = {}
         self.IP, self.port = sys.argv[1].split(":")
+
+        self.request_logs = []
 
     def connection_made(self, transport):
         self.transport = transport
@@ -20,23 +23,33 @@ class TorrentTracker:
         # Check if the message is a file registration or request
         if message.startswith('register'):
             _, filename, peer_address, filesize = message.split()
+            print(f"{peer_address} connected")
             if filename not in self.files:
                 self.files[filename] = []
                 self.sizes[filename] = filesize
             self.files[filename].append(peer_address)
             self.peers[peer_address] = time.time() # update last seen time
             print(f'File {filename} with size {filesize} registered by Peer at {peer_address}')
-            self.transport.sendto('ok\n'.encode(), addr)
+            self.transport.sendto(f'you({peer_address }) registerd {filename}'.encode(), addr)
+
+            self.request_logs.append(f"{peer_address}    SHARE: {filename}   {self.files[filename]}   SUCCESS")
 
 
         elif message.startswith('request'):
-            _, filename = message.split()
+            _, filename, peer_address = message.split()
+            print(f"{peer_address} connected")
             if filename in self.files:
                 peer_list = ' '.join(self.files[filename])
                 info = 'peers {}\n'.format(peer_list)
                 self.transport.sendto(info.encode(), addr)
+
+                self.request_logs.append(f"{peer_address}    GET: {filename}   {self.files[filename]}   SUCCESS")
             else:
                 self.transport.sendto('file not found\n'.encode(), addr)
+
+                self.request_logs.append(f"{peer_address}    GET: {filename}   {self.files[filename]}   FAIL")
+
+            
 
         elif message.startswith('size'):
             _, filename = message.split()
@@ -70,6 +83,23 @@ class TorrentTracker:
                     # self.transport.sendto('keepalive\n'.encode(), (peer_address, int(self.port)))
             await asyncio.sleep(10)
 
+    async def logger(self):
+        while True:
+            command = await aioconsole.ainput(">")
+        
+            if command == "request_logs":
+                for log in self.request_logs:
+                    print(log)
+
+            elif command == "file_logs":
+                command2 = await aioconsole.ainput(">>")
+                if command2 == "all":
+                    for f in list(self.files.keys()):
+                        print(f"{f}: {self.files[f]}")
+                elif command2 in self.files:
+                    print(f"{command2}: {self.files[command2]}")
+                
+
 
 
 async def start_tracker(tracker):
@@ -85,6 +115,7 @@ async def start_tracker(tracker):
 
     # Create a task to run the send_keepalive function
     asyncio.create_task(tracker.send_keepalive())
+    asyncio.create_task(tracker.logger())
 
     # Keep the server running indefinitely
     try:
@@ -92,6 +123,8 @@ async def start_tracker(tracker):
             await asyncio.sleep(3600)  # Sleep for an hour
     finally:
         transport.close()
+
+
 
 
 if __name__ == "__main__":
