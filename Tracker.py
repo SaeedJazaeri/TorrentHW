@@ -36,6 +36,12 @@ class TorrentTracker:
             else:
                 self.transport.sendto('file not found\n'.encode(), addr)
 
+        elif message.startswith('keepalive'):
+            _, address = message.split()
+            self.peers[address] = time.time()
+            
+
+
     def connection_lost(self, exc):
         pass
 
@@ -43,16 +49,18 @@ class TorrentTracker:
         while True:
             for peer_address in list(self.peers.keys()):
                 last_seen = self.peers[peer_address]
-                if time.time() - last_seen > 20:
+                if time.time() - last_seen > 10:
                     print(f"Peer at {peer_address} is not responding, removing from list")
                     for filename in self.files:
                         if peer_address in self.files[filename]:
                             self.files[filename].remove(peer_address)
                     del self.peers[peer_address]
                 else:
-                    print(f"Sending keepalive packet to {peer_address}")
-                    self.transport.sendto('keepalive\n'.encode(), (peer_address, int(self.port)))
+                    print(f"{peer_address} keeped alive")
+                    # self.transport.sendto('keepalive\n'.encode(), (peer_address, int(self.port)))
             await asyncio.sleep(10)
+
+
 
 async def start_tracker(tracker):
     # Create the UDP server to accept incoming connections
